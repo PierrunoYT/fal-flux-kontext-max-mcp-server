@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "fal-flux-kontext-max": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "https://github.com/PierrunoYT/fal-flux-kontext-max-mcp-server.git"
+      ],
+      "env": {
+        "FAL_KEY": "your_fal_api_key_here"
+      }
+    }
+  }
+}
