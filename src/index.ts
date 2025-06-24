@@ -534,6 +534,456 @@ ${downloadedImages.some(img => img.localPath) ? 'Images have been downloaded to 
   }
 );
 
+// Tool: Edit images with FLUX.1 Kontext [Max]
+server.tool(
+  "flux_kontext_max_edit",
+  {
+    description: "Edit images using FLUX.1 Kontext [Max] - Frontier image editing model that can handle complex editing tasks",
+    inputSchema: {
+      type: "object",
+      properties: {
+        prompt: {
+          type: "string",
+          description: "The text prompt describing the edit you want to make to the image"
+        },
+        image_url: {
+          type: "string",
+          description: "URL of the image to edit. Can be a public URL or base64 data URI"
+        },
+        seed: {
+          type: "integer",
+          description: "Random seed for reproducible generation. The same seed and prompt will output the same image every time"
+        },
+        guidance_scale: {
+          type: "number",
+          minimum: 1.0,
+          maximum: 20.0,
+          description: "The CFG (Classifier Free Guidance) scale - how closely the model follows your prompt (1.0-20.0)",
+          default: 3.5
+        },
+        sync_mode: {
+          type: "boolean",
+          description: "If true, waits for image generation and upload before returning. Increases latency but provides direct response",
+          default: false
+        },
+        num_images: {
+          type: "integer",
+          minimum: 1,
+          maximum: 4,
+          description: "Number of images to generate (1-4)",
+          default: 1
+        },
+        safety_tolerance: {
+          type: "string",
+          enum: ["1", "2", "3", "4", "5", "6"],
+          description: "Safety tolerance level (1=most strict, 6=most permissive)",
+          default: "2"
+        },
+        output_format: {
+          type: "string",
+          enum: ["jpeg", "png"],
+          description: "Output image format",
+          default: "jpeg"
+        },
+        aspect_ratio: {
+          type: "string",
+          enum: ["21:9", "16:9", "4:3", "3:2", "1:1", "2:3", "3:4", "9:16", "9:21"],
+          description: "Aspect ratio of the generated image",
+          default: "1:1"
+        }
+      },
+      required: ["prompt", "image_url"]
+    }
+  },
+  async (args: any) => {
+    // Check if FAL client is configured
+    if (!falClient) {
+      return {
+        content: [{
+          type: "text",
+          text: "Error: FAL_KEY environment variable is not set. Please configure your FAL API key."
+        }],
+        isError: true
+      };
+    }
+
+    const {
+      prompt,
+      image_url,
+      seed,
+      guidance_scale = 3.5,
+      sync_mode = false,
+      num_images = 1,
+      safety_tolerance = "2",
+      output_format = "jpeg",
+      aspect_ratio = "1:1"
+    } = args;
+    
+    try {
+      // Prepare input for FAL API
+      const input: any = {
+        prompt,
+        image_url,
+        guidance_scale,
+        sync_mode,
+        num_images,
+        safety_tolerance,
+        output_format,
+        aspect_ratio
+      };
+
+      // Add seed if provided
+      if (seed !== undefined) {
+        input.seed = seed;
+      }
+
+      console.error(`Editing image with FLUX.1 Kontext [Max] - prompt: "${prompt}", image_url: "${image_url}"`);
+
+      // Call FAL FLUX.1 Kontext [Max] API for image editing
+      const result = await fal.subscribe("fal-ai/flux-pro/kontext/max", {
+        input,
+        logs: true,
+        onQueueUpdate: (update: any) => {
+          if (update.status === "IN_PROGRESS") {
+            update.logs?.map((log: any) => log.message).forEach((msg: string) =>
+              console.error(`FAL Log: ${msg}`)
+            );
+          }
+        },
+      }) as { data: FluxImageResult; requestId: string };
+
+      // Download images locally
+      console.error("Downloading edited images locally...");
+      const downloadedImages = [];
+
+      for (let i = 0; i < result.data.images.length; i++) {
+        const img = result.data.images[i];
+        const filename = generateImageFilename(`edited_${prompt}`, i + 1, result.data.seed);
+        
+        try {
+          const localPath = await downloadImage(img.url, filename);
+          downloadedImages.push({
+            url: img.url,
+            localPath,
+            index: i + 1,
+            content_type: img.content_type || `image/${output_format}`,
+            width: img.width,
+            height: img.height
+          });
+          console.error(`Downloaded: ${filename}`);
+        } catch (downloadError) {
+          console.error(`Failed to download image ${i + 1}:`, downloadError);
+          // Still add the image info without local path
+          downloadedImages.push({
+            url: img.url,
+            localPath: null,
+            index: i + 1,
+            content_type: img.content_type || `image/${output_format}`,
+            width: img.width,
+            height: img.height
+          });
+        }
+      }
+
+      // Format response with download information
+      const imageDetails = downloadedImages.map(img => {
+        let details = `Image ${img.index}:`;
+        if (img.localPath) {
+          details += `\n  Local Path: ${img.localPath}`;
+        }
+        details += `\n  Original URL: ${img.url}`;
+        if (img.width && img.height) {
+          details += `\n  Dimensions: ${img.width}x${img.height}`;
+        }
+        return details;
+      }).join('\n\n');
+
+      const responseText = `Successfully edited ${downloadedImages.length} image(s) using FLUX.1 Kontext [Max]:
+
+Edit Prompt: "${prompt}"
+Source Image: ${image_url}
+Guidance Scale: ${guidance_scale}
+Aspect Ratio: ${aspect_ratio}
+Output Format: ${output_format}
+Safety Tolerance: ${safety_tolerance}
+Seed: ${result.data.seed}
+Request ID: ${result.requestId}
+
+Edited Images:
+${imageDetails}
+
+${downloadedImages.some(img => img.localPath) ? 'Images have been downloaded to the local \'images\' directory.' : 'Note: Local download failed, but original URLs are available.'}`;
+
+      return {
+        content: [
+          {
+            type: "text",
+            text: responseText
+          }
+        ]
+      };
+
+    } catch (error) {
+      console.error('Error editing image:', error);
+      
+      let errorMessage = "Failed to edit image with FLUX.1 Kontext [Max].";
+      
+      if (error instanceof Error) {
+        errorMessage += ` Error: ${error.message}`;
+      }
+
+      return {
+        content: [
+          {
+            type: "text",
+            text: errorMessage
+          }
+        ],
+        isError: true
+      };
+    }
+  }
+);
+
+// Tool: Edit images using queue method (for longer requests)
+server.tool(
+  "flux_kontext_max_edit_async",
+  {
+    description: "Edit images using FLUX.1 Kontext [Max] with async queue method for longer requests",
+    inputSchema: {
+      type: "object",
+      properties: {
+        prompt: {
+          type: "string",
+          description: "The text prompt describing the edit you want to make to the image"
+        },
+        image_url: {
+          type: "string",
+          description: "URL of the image to edit. Can be a public URL or base64 data URI"
+        },
+        seed: {
+          type: "integer",
+          description: "Random seed for reproducible generation. The same seed and prompt will output the same image every time"
+        },
+        guidance_scale: {
+          type: "number",
+          minimum: 1.0,
+          maximum: 20.0,
+          description: "The CFG (Classifier Free Guidance) scale - how closely the model follows your prompt (1.0-20.0)",
+          default: 3.5
+        },
+        sync_mode: {
+          type: "boolean",
+          description: "If true, waits for image generation and upload before returning. Increases latency but provides direct response",
+          default: false
+        },
+        num_images: {
+          type: "integer",
+          minimum: 1,
+          maximum: 4,
+          description: "Number of images to generate (1-4)",
+          default: 1
+        },
+        safety_tolerance: {
+          type: "string",
+          enum: ["1", "2", "3", "4", "5", "6"],
+          description: "Safety tolerance level (1=most strict, 6=most permissive)",
+          default: "2"
+        },
+        output_format: {
+          type: "string",
+          enum: ["jpeg", "png"],
+          description: "Output image format",
+          default: "jpeg"
+        },
+        aspect_ratio: {
+          type: "string",
+          enum: ["21:9", "16:9", "4:3", "3:2", "1:1", "2:3", "3:4", "9:16", "9:21"],
+          description: "Aspect ratio of the generated image",
+          default: "1:1"
+        }
+      },
+      required: ["prompt", "image_url"]
+    }
+  },
+  async (args: any) => {
+    // Check if FAL client is configured
+    if (!falClient) {
+      return {
+        content: [{
+          type: "text",
+          text: "Error: FAL_KEY environment variable is not set. Please configure your FAL API key."
+        }],
+        isError: true
+      };
+    }
+
+    const {
+      prompt,
+      image_url,
+      seed,
+      guidance_scale = 3.5,
+      sync_mode = false,
+      num_images = 1,
+      safety_tolerance = "2",
+      output_format = "jpeg",
+      aspect_ratio = "1:1"
+    } = args;
+    
+    try {
+      // Prepare input for FAL API
+      const input: any = {
+        prompt,
+        image_url,
+        guidance_scale,
+        sync_mode,
+        num_images,
+        safety_tolerance,
+        output_format,
+        aspect_ratio
+      };
+
+      // Add seed if provided
+      if (seed !== undefined) {
+        input.seed = seed;
+      }
+
+      console.error(`Submitting async image edit request with FLUX.1 Kontext [Max] - prompt: "${prompt}", image_url: "${image_url}"`);
+
+      // Submit request to queue
+      const { request_id } = await fal.queue.submit("fal-ai/flux-pro/kontext/max", {
+        input
+      });
+
+      console.error(`Edit request submitted with ID: ${request_id}`);
+
+      // Poll for completion
+      let result;
+      let attempts = 0;
+      const maxAttempts = 60; // 5 minutes with 5-second intervals
+
+      while (attempts < maxAttempts) {
+        const status = await fal.queue.status("fal-ai/flux-pro/kontext/max", {
+          requestId: request_id,
+          logs: true
+        });
+
+        console.error(`Status check ${attempts + 1}: ${status.status}`);
+
+        if (status.status === "COMPLETED") {
+          result = await fal.queue.result("fal-ai/flux-pro/kontext/max", {
+            requestId: request_id
+          });
+          break;
+        }
+        
+        // Check if we should continue polling
+        if (status.status !== "IN_QUEUE" && status.status !== "IN_PROGRESS") {
+          throw new Error(`Image editing failed with status: ${(status as any).status}`);
+        }
+
+        // Wait 5 seconds before next check
+        await new Promise(resolve => setTimeout(resolve, 5000));
+        attempts++;
+      }
+
+      if (!result) {
+        throw new Error("Request timed out after 5 minutes");
+      }
+
+      // Download images locally
+      console.error("Downloading edited images locally...");
+      const downloadedImages = [];
+
+      for (let i = 0; i < result.data.images.length; i++) {
+        const img = result.data.images[i];
+        const filename = generateImageFilename(`edited_async_${prompt}`, i + 1, result.data.seed);
+        
+        try {
+          const localPath = await downloadImage(img.url, filename);
+          downloadedImages.push({
+            url: img.url,
+            localPath,
+            index: i + 1,
+            content_type: img.content_type || `image/${output_format}`,
+            width: img.width,
+            height: img.height
+          });
+          console.error(`Downloaded: ${filename}`);
+        } catch (downloadError) {
+          console.error(`Failed to download image ${i + 1}:`, downloadError);
+          // Still add the image info without local path
+          downloadedImages.push({
+            url: img.url,
+            localPath: null,
+            index: i + 1,
+            content_type: img.content_type || `image/${output_format}`,
+            width: img.width,
+            height: img.height
+          });
+        }
+      }
+
+      // Format response with download information
+      const imageDetails = downloadedImages.map(img => {
+        let details = `Image ${img.index}:`;
+        if (img.localPath) {
+          details += `\n  Local Path: ${img.localPath}`;
+        }
+        details += `\n  Original URL: ${img.url}`;
+        if (img.width && img.height) {
+          details += `\n  Dimensions: ${img.width}x${img.height}`;
+        }
+        return details;
+      }).join('\n\n');
+
+      const responseText = `Successfully edited ${downloadedImages.length} image(s) using FLUX.1 Kontext [Max] (Async):
+
+Edit Prompt: "${prompt}"
+Source Image: ${image_url}
+Guidance Scale: ${guidance_scale}
+Aspect Ratio: ${aspect_ratio}
+Output Format: ${output_format}
+Safety Tolerance: ${safety_tolerance}
+Seed: ${result.data.seed}
+Request ID: ${request_id}
+
+Edited Images:
+${imageDetails}
+
+${downloadedImages.some(img => img.localPath) ? 'Images have been downloaded to the local \'images\' directory.' : 'Note: Local download failed, but original URLs are available.'}`;
+
+      return {
+        content: [
+          {
+            type: "text",
+            text: responseText
+          }
+        ]
+      };
+
+    } catch (error) {
+      console.error('Error in async image editing:', error);
+      
+      let errorMessage = "Failed to edit image with FLUX.1 Kontext [Max] (async).";
+      
+      if (error instanceof Error) {
+        errorMessage += ` Error: ${error.message}`;
+      }
+
+      return {
+        content: [
+          {
+            type: "text",
+            text: errorMessage
+          }
+        ],
+        isError: true
+      };
+    }
+  }
+);
+
 // Graceful shutdown handlers
 process.on('SIGINT', () => {
   console.error('Received SIGINT, shutting down gracefully...');

@@ -1,7 +1,7 @@
 {
   "name": "fal-flux-kontext-max-mcp-server",
-  "version": "1.0.0",
-  "description": "MCP server for FLUX.1 Kontext [Max] - Frontier image generation model with advanced text rendering and contextual understanding",
+  "version": "1.1.0",
+  "description": "MCP server for FLUX.1 Kontext [Max] - Frontier image generation and editing model with advanced text rendering and contextual understanding",
   "type": "module",
   "main": "build/index.js",
   "bin": "./build/index.js",
@@ -28,6 +28,7 @@
     "fal",
     "fal-ai",
     "image-generation",
+    "image-editing",
     "ai",
     "text-rendering",
     "typescript",

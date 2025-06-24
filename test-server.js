@@ -79,6 +79,30 @@ setTimeout(() => {
   
   if (serverOutput.includes('tools')) {
     console.log('✅ Server responded to tools/list request');
+    
+    // Check for expected tools
+    const expectedTools = [
+      'flux_kontext_max_generate',
+      'flux_kontext_max_generate_async',
+      'flux_kontext_max_edit',
+      'flux_kontext_max_edit_async'
+    ];
+    
+    let toolsFound = 0;
+    expectedTools.forEach(tool => {
+      if (serverOutput.includes(tool)) {
+        console.log(`✅ Found tool: ${tool}`);
+        toolsFound++;
+      } else {
+        console.log(`❌ Missing tool: ${tool}`);
+      }
+    });
+    
+    if (toolsFound === expectedTools.length) {
+      console.log('✅ All expected tools are available');
+    } else {
+      console.log(`⚠️  Found ${toolsFound}/${expectedTools.length} expected tools`);
+    }
   } else {
     console.log('⚠️  No tools response detected (this might be normal)');
   }

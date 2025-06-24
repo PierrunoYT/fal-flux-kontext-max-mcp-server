@@ -16,13 +16,14 @@ A Model Context Protocol (MCP) server that provides access to FLUX.1 Kontext [Ma
 ## Features
 
 - **Frontier Image Generation**: Uses FLUX.1 Kontext [Max] - the latest frontier model via FAL AI
+- **Advanced Image Editing**: Powerful image editing capabilities with contextual understanding
 - **Advanced Text Rendering**: Superior text integration and rendering capabilities
 - **Contextual Understanding**: Enhanced understanding of complex prompts and context
 - **Automatic Image Download**: Generated images are automatically saved to local `images` directory
 - **Multiple Aspect Ratios**: Support for 21:9, 16:9, 4:3, 3:2, 1:1, 2:3, 3:4, 9:16, and 9:21
 - **Batch Generation**: Generate up to 4 images at once
 - **Reproducible Results**: Optional seed parameter for consistent outputs
-- **Dual Generation Methods**: Both real-time and async queue-based generation
+- **Dual Generation Methods**: Both real-time and async queue-based generation for text-to-image and image editing
 - **Flexible Output Formats**: Support for JPEG and PNG formats
 - **Safety Controls**: Configurable safety tolerance levels (1-6)
 - **Guidance Scale Control**: Fine-tune how closely the model follows your prompt (1.0-20.0)
@@ -179,6 +180,44 @@ Generate images using FLUX.1 Kontext [Max] with async queue processing for longe
 - 5-minute timeout with progress updates
 - Detailed logging of generation progress
 
+### `flux_kontext_max_edit`
+
+Edit images using FLUX.1 Kontext [Max] with real-time processing.
+
+**Parameters:**
+- `prompt` (required): Text description of the edit to apply to the image
+- `image_url` (required): URL of the image to edit (public URL or base64 data URI)
+- `seed` (optional): Random seed for reproducible generation
+- `guidance_scale` (optional): CFG scale 1.0-20.0 (default: 3.5)
+- `sync_mode` (optional): Wait for generation before returning (default: false)
+- `num_images` (optional): Number of images to generate, 1-4 (default: 1)
+- `safety_tolerance` (optional): Safety level "1"-"6" (default: "2")
+- `output_format` (optional): "jpeg" or "png" (default: "jpeg")
+- `aspect_ratio` (optional): "21:9", "16:9", "4:3", "3:2", "1:1", "2:3", "3:4", "9:16", "9:21" (default: "1:1")
+
+**Response includes:**
+- Edited image URLs for immediate access
+- Generation metadata (seed, request ID, guidance scale)
+- File information (content type, dimensions)
+- Local file paths for downloaded images
+
+### `flux_kontext_max_edit_async`
+
+Edit images using FLUX.1 Kontext [Max] with async queue processing for longer requests.
+
+**Parameters:** Same as `flux_kontext_max_edit`
+
+**Use this tool when:**
+- Editing complex images that might take longer
+- Generating multiple edited variations (2-4)
+- When the regular edit tool times out
+- For batch image editing workflows
+
+**Features:**
+- Queue-based processing with status polling
+- 5-minute timeout with progress updates
+- Detailed logging of editing progress
+
 ## 📥 **How Image Download Works**
 
 The FAL FLUX.1 Kontext [Max] MCP server automatically downloads generated images to your local machine. Here's the complete process:
@@ -301,6 +340,35 @@ with aspect ratio 21:9, guidance scale 4.0, and seed 12345 for reproducible resu
 Create an image of a vintage bookstore with multiple book spines showing titles like "The Art of Code", "Digital Dreams", and "Future Stories" clearly readable
 ```
 
+### Image Editing Examples
+
+#### Basic Image Editing
+```
+Edit this image to add a rainbow in the sky
+Image URL: https://example.com/landscape.jpg
+```
+
+#### Complex Image Editing
+```
+Edit the image with:
+- Prompt: "Add a donut next to the flour on the counter"
+- Image URL: https://v3.fal.media/files/rabbit/rmgBxhwGYb2d3pl3x9sKf_output.png
+- Guidance scale: 4.0
+- Output format: png
+```
+
+#### Text Addition to Images
+```
+Add the text "SALE 50% OFF" in bold red letters to this storefront image
+Image URL: https://example.com/storefront.jpg
+```
+
+#### Style Transfer and Modifications
+```
+Transform this portrait to have a vintage sepia tone effect while keeping the person's features intact
+Image URL: https://example.com/portrait.jpg
+```
+
 ## Technical Details
 
 ### Architecture
@@ -311,8 +379,10 @@ Create an image of a vintage bookstore with multiple book spines showing titles 
 - **Validation**: Zod schema validation
 
 ### API Endpoints Used
-- **Real-time**: `fal-ai/flux-pro/kontext/max/text-to-image` (subscribe method)
-- **Async**: `fal-ai/flux-pro/kontext/max/text-to-image` (queue method)
+- **Text-to-Image Real-time**: `fal-ai/flux-pro/kontext/max/text-to-image` (subscribe method)
+- **Text-to-Image Async**: `fal-ai/flux-pro/kontext/max/text-to-image` (queue method)
+- **Image Editing Real-time**: `fal-ai/flux-pro/kontext/max` (subscribe method)
+- **Image Editing Async**: `fal-ai/flux-pro/kontext/max` (queue method)
 
 ### Error Handling
 - **Graceful API key handling**: Server continues running even without FAL_KEY set
@@ -419,7 +489,16 @@ MIT License - see [LICENSE](LICENSE) file for details.
 
 ## Changelog
 
-### v1.0.0 (Latest)
+### v1.1.0 (Latest)
+- **✨ NEW: Image Editing**: Added FLUX.1 Kontext [Max] image editing capabilities
+- **🔧 New Tools**: `flux_kontext_max_edit` and `flux_kontext_max_edit_async` for image editing
+- **🖼️ Image Input Support**: Accept image URLs and base64 data URIs for editing
+- **🎨 Advanced Editing**: Complex image modifications with contextual understanding
+- **📝 Text Addition**: Add text overlays and modifications to existing images
+- **🔄 Dual Editing Methods**: Both real-time and async queue-based image editing
+- **📥 Auto-download**: Edited images automatically saved with descriptive filenames
+
+### v1.0.0
 - **🚀 Initial release**: FLUX.1 Kontext [Max] support via FAL AI
 - **📥 Automatic image download**: Generated images are automatically saved to local `images` directory
 - **🗂️ Smart filename generation**: Images saved with descriptive names including prompt, seed, and timestamp
