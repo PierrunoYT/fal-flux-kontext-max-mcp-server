@@ -5,8 +5,8 @@ yarn-debug.log*
 yarn-error.log*
 
 # Build output
-build/
 dist/
+# Note: build/ is included for MCP server distribution
 
 # Environment variables
 .env
